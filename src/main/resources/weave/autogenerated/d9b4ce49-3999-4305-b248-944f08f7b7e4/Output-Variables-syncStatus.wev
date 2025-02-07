@@ -1,0 +1,7 @@
+%dw 2.0
+
+type auto_d9b4ce49_3999_4305_b248_944f08f7b7e4_Output_Variables_syncStatus = {|
+  status: String, 
+  timestamp: String
+|}
+

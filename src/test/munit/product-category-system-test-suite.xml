@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools  http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+	<munit:config name="product-category-system-test-suite.xml" />
+	<munit:test name="product-category-system-test-suite-product-idTestPassed" doc:id="6e2cb02e-1b90-4c24-8b33-77a8564dba44" description="Test">
+		<munit:behavior >
+			<munit-tools:mock-when doc:name="Mock when" doc:id="dfe810a9-5677-44c2-8801-db9fdc60ed30" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="67eeea1f-cc8b-4f2e-a44e-582f1e72c5aa" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value='#[{&#10;                    "id": 1,&#10;                    "title": "Product 1",&#10;                    "price": 29.99,&#10;                    "description": "A great product.",&#10;                    "category": "electronics",&#10;                    "image": "https://example.com/image1.jpg",&#10;                    "rating": &#10;                    {&#10;                      "rate": 3.9,&#10;                      "count": 120&#10;                    }&#10;                  }]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<munit:set-event doc:name="Set Event" doc:id="565ad6d4-11c1-42bc-83d4-86c9318a1dd6" >
+				<munit:attributes value="#[{'requestPath': '/api/products/1', 'method': 'GET', 'uriParams': {'id': '1'}}]" />
+			</munit:set-event>
+			<flow-ref doc:name="Flow-ref to product-id" doc:id="7e5f265d-96eb-4aa4-89f5-e1b369ec5159" name="product-id"/>
+		</munit:execution>
+		<munit:validation>
+			<munit-tools:assert doc:name="Assert expression" doc:id="046b1a38-eb1a-405a-a653-ef7c3d999119" >
+				<munit-tools:that ><![CDATA[#[import * from dw::test::Asserts 
+ ---
+ payload.id must equalTo(1)]]]></munit-tools:that>
+			</munit-tools:assert>
+			<munit-tools:assert doc:name="Assert expression" doc:id="287c435d-3a48-467a-b997-82baa1981cb3" >
+				<munit-tools:that ><![CDATA[#[import * from dw::test::Asserts 
+ ---
+payload.id must notBeNull()]]]></munit-tools:that>
+			</munit-tools:assert>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="product-category-system-test-suite-product-idTestFailed" doc:id="3794ac40-b578-463c-8c79-b09f65297b7a" description="Test" ignore="true">
+		<munit:behavior >
+			<munit-tools:mock-when doc:name="Mock when" doc:id="62520540-87f7-4baa-b826-0533a8b849b8" processor="db:select">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="67eeea1f-cc8b-4f2e-a44e-582f1e72c5aa" attributeName="doc:id" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[[]]" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<munit:set-event doc:name="Set Event" doc:id="bf283fac-e517-493b-9244-7909a1bb6540" >
+				<munit:attributes value="#[{&#10;        'requestPath': '/api/products/9999',&#10;        'method': 'GET',&#10;        'uriParams': {'id': '9999'}&#10;    }]" />
+			</munit:set-event>
+			<flow-ref doc:name="Flow-ref to product-id" doc:id="2669292b-7728-4e89-991d-2c6120d4c655" name="product-id"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="d6f06b48-70ed-44d1-9e52-a80117345a21" is="#[MunitTools::equalTo('Product not found')]" expression="#[error.description]" />
+		</munit:validation>
+	</munit:test>
+
+
+</mule>

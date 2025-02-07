@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:db="http://www.mulesoft.org/schema/mule/db" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd">
+	<configuration-properties doc:name="Configuration properties" doc:id="9d8445ed-88ce-42c5-8232-2f7fc9de0f3b" file="config.yaml" />
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="30ddd615-4bea-4993-8e0d-78f0e2c5a988" >
+		<http:listener-connection host="0.0.0.0" port="${http.port}" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="b5a46c3c-f732-4ee6-88d7-419a4e4ae742">
+		<http:request-connection host="${httprequest.host}" protocol="HTTPS"/>
+	</http:request-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="702a8638-c9ad-45e5-8bc7-7cd8ad013f98" >
+		<db:generic-connection url="jdbc:h2:tcp://localhost/~/training_db" driverClassName="org.h2.Driver" user="sa"/>
+	</db:config>
+	<flow name="product-sync-products" doc:id="d9b4ce49-3999-4305-b248-944f08f7b7e4" >
+		<set-variable value='#[uuid()]' doc:name="Set Variable" doc:id="5fbfcfc0-a073-40f2-a35f-e463fc8bc9a3" variableName="syncId"/>
+		<db:insert doc:name="Insert" doc:id="f08ab07f-32e5-4821-bba6-1c9840eb09f1" config-ref="Database_Config">
+			<db:sql ><![CDATA[ INSERT INTO training_db.sync_logs (id, sync_start, status) VALUES (:syncId, NOW(), 'IN_PROGRESS')]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{ syncId: vars.syncId }]]]></db:input-parameters>
+		</db:insert>
+		<logger level="INFO" doc:name="Logger" doc:id="decc7cb3-af78-488d-a7f9-f33f3c6da5c3" category="com.demo.product-category-system.product-sync-products-flow.#1" message="log details entered in sync_logs"/>
+		<http:request method="GET" doc:name="Request" doc:id="6e599616-7803-4d18-b2fc-e9a2978ee691" config-ref="HTTP_Request_configuration" url="https://fakestoreapi.com/products"/>
+		<logger level="INFO" doc:name="Logger" doc:id="b11b138b-32cc-4bd7-8e6a-41fe1b0ab605" message="Product details retrieved successfully" category="com.demo.product-category-system.product-sync-products-flow.#2"/>
+		<ee:transform doc:name="Transform Message" doc:id="98e6fc0e-8a4d-4e53-ad4b-b007c16e8927">
+			<ee:message>
+				<ee:set-payload><![CDATA[
+%dw 2.0
+output application/json
+var products = payload
+---
+products map (product) -> {
+  id: product.id,
+  title: product.title,
+   price: product.price,
+  description: product.description,
+  category: product.category,
+  image: product.image,
+  rating_rate: product.rating.rate,
+  rating_count: product.rating.count
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<db:bulk-insert doc:name="Bulk insert" doc:id="96ac19bd-c18f-42e8-bac1-bc107f75b555" config-ref="Database_Config">
+			<db:sql ><![CDATA[INSERT INTO training_db.products (id, title, price, description, category, image, rating_rate, rating_count) 
+VALUES (
+    :id, :title, :price, :description, :category, :image, :rating_rate, :rating_count
+)]]></db:sql>
+		</db:bulk-insert>
+		<logger level="INFO" doc:name="Logger" doc:id="3c006223-e218-4a83-b5c4-cc425b971bd3" message="Product details inserted to database" category="com.demo.product-category-system.product-sync-products-flow.#3"/>
+		<db:update doc:name="Update" doc:id="b9a497ba-05de-4fa7-8c8d-55ea6220a92e" config-ref="Database_Config">
+			<db:sql ><![CDATA[ UPDATE training_db.sync_logs SET sync_end = NOW(), records_processed = (SELECT COUNT(*) FROM training_db.products), status = 'COMPLETED'
+            WHERE id = :syncId]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{ syncId: vars.syncId }]]]></db:input-parameters>
+		</db:update>
+		<set-payload value='#["message": "Product sync initiated successfully"]' doc:name="Set Payload" doc:id="8772a02a-2601-4ef2-8a8f-83cd47a889d4" />
+		<ee:transform doc:name="Transform Message" doc:id="9d30ac8b-6b51-4adf-83f8-a0dfd4bd4296" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="177dd708-1e60-47c1-86a7-bbab0b9d34ea" message="Products Synced Successfully" category="com.demo.product-category-system.product-sync-products-flow.#4"/>
+		<error-handler ref="globalErrorHandler" />
+	</flow>
+	<flow name="product-sync-status" doc:id="ae1d32c1-9032-48b7-9e67-353bcb7b7383" >
+		<db:select doc:name="Select" doc:id="e4df4be6-c655-41da-b183-f7e620cdf88f" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT * FROM training_db.sync_logs ORDER BY sync_start DESC LIMIT 1]]></db:sql>
+		</db:select>
+		<set-payload value='#[payload]' doc:name="Set Payload" doc:id="707d0968-ace4-4a26-814e-3ed22460136e" />
+		<ee:transform doc:name="Transform Message" doc:id="1ed6f581-d36a-476c-a2b8-58fcae3a9c42" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="0b722a76-41e9-4ab9-8c0d-3a21721c7e58" message="sync status received" category="com.demo.product-category-system.product-sync-status-flow.#1"/>
+		<error-handler ref="globalErrorHandler" />
+	</flow>
+	<flow name="product" doc:id="12f2f23a-e018-41be-9a01-2704712bc34d" >
+		<db:select doc:name="Select" doc:id="103de4db-73df-4dec-8ef7-784b0051521c" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT * FROM training_db.PRODUCTS LIMIT :limit OFFSET :offset]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{"limit": attributes.queryParams.limit,
+"offset": attributes.queryParams.offset
+}]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="e902499e-7a2f-498b-8c26-89b5b722bfbf" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="34f7f421-10c9-47ac-8450-bdd8ab194126" message="retrieved the product data from local database" category="com.demo.product-category-system.product-flow.#1"/>
+		<error-handler ref="globalErrorHandler" />
+	</flow>
+	<flow name="product-id" doc:id="24f5d965-455f-483c-adcb-678fb42ecd71" >
+		<db:select doc:name="Select" doc:id="67eeea1f-cc8b-4f2e-a44e-582f1e72c5aa" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT * FROM training_db.products WHERE id = :id
+]]></db:sql>
+			<db:input-parameters ><![CDATA[#[id: attributes.uriParams.id]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="a142eaed-2918-483a-be9a-4b7ececfb1dc">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="53178046-60b1-40a7-bfee-62e935446380" message="product not found" category="com.demo.product-category-system.product-id-flow.#1" />
+		<error-handler ref="globalErrorHandler" />
+	</flow>
+	<flow name="product-category" doc:id="f1a872e4-74ba-418e-b233-eae5753fbd57" >
+		<db:select doc:name="Select" doc:id="3bff6c02-43b7-4827-bc1f-bcc72fb7ac6e" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT * FROM training_db.PRODUCTS WHERE category = :category]]></db:sql>
+			<db:input-parameters ><![CDATA[#[category: attributes.uriParams.category]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="e57d81ab-c548-4ea0-82a0-29b84d206a1d" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="16367971-3eab-4b86-8632-b6db695c7ac1" message="retrieved products based on category" category="com.demo.product-category-system.product-category-flow.#1"/>
+		<error-handler ref="globalErrorHandler" />
+	</flow>
+	<flow name="product-price" doc:id="8cc860ce-7ec0-46f4-8085-29cf3976837a" >
+		<db:select doc:name="Select" doc:id="a26377dc-830e-40a3-984a-a25842a4a0d7" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT * FROM training_db.products
+            WHERE price >= :minprice AND price <= :maxprice]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+	"minprice": attributes.queryParams.minprice,
+    "maxprice": attributes.queryParams.maxprice
+    }]]]></db:input-parameters>
+		</db:select>
+		<ee:transform doc:name="Transform Message" doc:id="1b35f633-ac78-4c18-815c-0b6847f2c67a">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="ade72767-b107-4c94-a16e-fb5c6ea5dfb4" message="price details received successfully" category="com.demo.product-category-system.product-price-flow.#1"/>
+		<error-handler ref="globalErrorHandler" />
+	</flow>
+</mule>

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd">
+	<configuration doc:name="Configuration" doc:id="83f5d4b5-f094-492f-9166-01d2f4463c62" defaultErrorHandler-ref="globalErrorHandler" />
+	<error-handler name="globalErrorHandler" doc:id="950d9323-4c7b-4f8c-9f70-f7724ef8b319" >
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="6ff58acf-e3c1-4f1f-8f96-6e1a16ba1fbf" type="DB:CONNECTIVITY">
+			<ee:transform doc:name="Transform Message" doc:id="4018f767-512c-47ac-8c1b-be205eecacbd" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "code": "ERROR",
+    "message": "Database connection failed",
+    "detailedMessage": "Cannot connect to H2 database"
+}]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<set-variable value="500" doc:name="httpStatus" doc:id="54ab05b0-afed-4aa6-805b-3543cd55e8f7" variableName="httpStatus"/>
+			<logger level="INFO" doc:name="Logger" doc:id="5184e357-b77d-42af-ba70-ce68227bf66d" message="Database Error: #[error.description]"/>
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="1c464689-cc94-4e6b-b972-22bbe9a3afdc" type="DB:QUERY_EXECUTION">
+			<ee:transform doc:name="Transform Message" doc:id="851dc29b-96bf-459b-bae9-bc074ef51dd3" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "code": "ERROR",
+    "message": "Missing required field: category",
+    "detailedMessage": "Validation failed due to missing category parameter."
+}
+]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<set-variable value="400" doc:name="httpStatus" doc:id="4ee923a3-8781-46a6-b933-a936ed6e9fc6" variableName="httpStatus"/>
+			<logger level="INFO" doc:name="Logger" doc:id="094c1f5f-bfdc-41b9-b3bb-17ff670d5472" message="Validation Error: #[error.description]"/>
+		</on-error-propagate>
+		<on-error-propagate enableNotifications="true" logException="true" doc:name="On Error Propagate" doc:id="124f3c1d-8318-409f-917d-6842fe0b0edd" type="HTTP:NOT_FOUND">
+			<ee:transform doc:name="Transform Message" doc:id="92a5a788-c14b-479a-b5fb-1fc070c8b955" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    "code": "ERROR",
+    "message": "HTTP not found Error",
+    "detailedMessage": "Cannot connect to http"
+}
+]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<set-variable value="404" doc:name="httpStatus" doc:id="b47ba3e4-6b1e-4139-ab59-4e375e85ccdd" variableName="httpStatus"/>
+			<logger level="INFO" doc:name="Logger" doc:id="af033df2-fe10-427b-8805-146d16269402" message="Http Not Found Error: #[error.description]"/>
+		</on-error-propagate>
+	</error-handler>
+</mule>
